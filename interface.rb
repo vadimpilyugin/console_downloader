@@ -50,10 +50,24 @@ class String
 end
 
 class QueryObject <InterfaceObject
+  def initialize
+    @cursor = Cursor.get
+  end
   def draw_window
-    system 'clear'
-    puts "Введите запрос. Он будет отправлен на rutracker.org\r\n".green+''.white
-    print '> '
+    @cursor.clear
+    messages = [
+      'Rutracker Downloader v1.0',
+      '=========================',
+      '',
+      "Введите запрос. Он будет отправлен на rutracker.org",
+      "Или введите 'q' для выхода",
+      '',
+    ].each_with_index {|msg,i|
+      @cursor.move_to(i,Cursor::FIRST_COL)
+      @cursor.print(msg,:green)
+    }
+    @cursor.move_to(messages.size,Cursor::FIRST_COL)
+    @cursor.print('> ',:white)
   end
   def process_query(query)
     @query = query
@@ -67,7 +81,9 @@ class QueryObject <InterfaceObject
     @entries = table.select{|elem| elem[:seeds] > 0}
   end
   def entries
-    @entries
+    # @entries
+    require 'yaml'
+    YAML.load_file('menu.yml')['menu']
   end
   def query
     @query
@@ -113,6 +129,14 @@ class SearchResultsObject <InterfaceObject
     s1 = s[0...to]
     s1 + ' '*(to-s1.size)
   end
+  def cut(s,column_size,offset)
+    s = s.to_s
+    if s.size > column_size
+      s = s + ' '*5
+      s = s.my_range(offset % s.size,(column_size+offset) % s.size)
+    end
+    complete(s, column_size)
+  end
   def redraw_selected(color=:green)
     return if entries.nil? || entries.empty?
     @cursor.move_to(@selected,Cursor::FIRST_COL)
@@ -120,33 +144,32 @@ class SearchResultsObject <InterfaceObject
     @offset += 1
     # @cursor.move_to(@selected,Cursor::FIRST_COL)
   end
-  def print_entry(entry,color,offset=0)
-    name_len = 30
-    name = entry[:name]
-    if name.size > name_len
-      name = entry[:name] + ' '*5
-      name = name.my_range(offset%name.size,(name_len+offset)%name.size)
-      name = complete(name, name_len)
-    else
-      name = complete(name, name_len)
-    end
-    category_len = 20
-    category = entry[:category]
-    if category.size > category_len
-      category = entry[:category] + ' '*5
-      category = category.my_range(offset%category.size,(category_len+offset)%category.size)
-      category = complete(category, category_len)
-    else
-      category = complete(category, category_len)
-    end
 
-    size = complete(entry[:hr_size][0...10], 10)
-    seeds = entry[:seeds].to_s # не надо ограничивать
-    space = " "*5
-    @cursor.print(
-      category+space+name+space+size+space+seeds,
-      color
-    )
+  SPACE = ' '*5
+  LAYOUT = [:category,:space,:name,:space,:hr_size,:space,:seeds]
+  COLUMNS = {
+    category: 30,
+    name: 45,
+    hr_size: 5,
+    seeds: 5,
+    space: 5 # * LAYOUT.count(:space)
+  }
+  def print_entry(entry,color,offset=0)
+    part_len = Cursor::MAX_COLS/100.0
+    # part_len = (Cursor::MAX_COLS - LAYOUT.count(:space)*SPACE.size)/LAYOUT.size
+    columns = COLUMNS.transform_values {|v|(v*part_len).to_i }
+
+    msg = {}
+    entry[:space] = ' '*columns[:space]
+    COLUMNS.each_key{|col| msg[col] = cut(entry[col], columns[col], offset)}
+    entry.delete(:space)
+    # msg[:space] = SPACE
+    # msg[:name] = cut(entry[:name], columns[:name], offset)
+    # msg[:category] = cut(entry[:category], columns[:category], offset)
+    # msg[:size] = cut(entry[:hr_size],columns[:size])
+    # msg[:seeds] = cut(entry[:seeds],columns[:seeds])
+
+    LAYOUT.each{|column| @cursor.print(msg[column],color)}
   end
   def action_on_arrow(c)
     @offset = 0
@@ -154,7 +177,7 @@ class SearchResultsObject <InterfaceObject
       redraw_selected(:white)
       @selected -= 1
       redraw_selected(:green)
-    elsif c == Input::ARROW_DOWN && @selected < entries.size-1
+    elsif c == Input::ARROW_DOWN && @selected < Cursor::MAX_ROWS-1
       redraw_selected(:white)
       @selected += 1
       redraw_selected(:green)

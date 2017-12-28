@@ -32,4 +32,5 @@ rescue StandardError => exc
 ensure
 	input_obj.make_cooked
 	cursor.show
+	cursor.clear
 end
