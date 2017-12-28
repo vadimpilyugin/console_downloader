@@ -207,13 +207,13 @@ class DescrObject <InterfaceObject
     HtmlTools.extract_dl_link(html)
   end
   def draw_window
-    system 'clear'
     @cursor.hide
+    @cursor.clear
     draw_descr
   end
   def descr
     HtmlTools.extract_descr(html).first(Cursor::MAX_ROWS-2).select{|line|
-      line.size < 200 && line !~ /(раздач|криншот|равнен|тех. данн)/
+      line.size < Cursor::MAX_COLS && line !~ /(раздач|криншот|равнен|тех. данн)/
     }.map{|line| line.gsub(/(\t|\n)/,'')}
   end
   def selected_entry
